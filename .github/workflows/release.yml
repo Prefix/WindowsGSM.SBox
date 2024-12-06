@@ -1,0 +1,91 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.determine_new_tag.outputs.result }}
+      no_release: ${{ steps.check_release.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+
+      - name: Bump version and push tag
+        id: create_tag
+        uses: anothrNick/github-tag-action@1.64.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch
+          INITIAL_VERSION: 1.0.0
+
+      - name: Determine New Tag
+        id: determine_new_tag
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const createdTag = "${{ steps.create_tag.outputs.new_tag }}";
+            console.log(`New tag determined: ${createdTag}`);
+            return createdTag;
+
+      - name: Check if release exists
+        id: check_release
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            let release_exists;
+            try {
+              const response = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: ${{ steps.determine_new_tag.outputs.result }}
+              });
+              console.log(`Release found for tag: ${response.data.tag_name}`);
+              release_exists = true;
+            } catch (error) {
+              if (error.status === 404) {
+                console.log("No release found for this tag.");
+                release_exists = false;
+              } else {
+                throw error;
+              }
+            }
+            return release_exists;
+
+  build:
+    if: needs.version.outputs.no_release == 'false'
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Zip SBox.cs folder
+        run: zip -r SBox.zip SBox.cs
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.version.outputs.new_tag }}
+          release_name: Release ${{ needs.version.outputs.new_tag }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./SBox.zip
+          asset_name: SBox.zip
+          asset_content_type: application/zip
