@@ -27,11 +27,6 @@
 ### Port Forwarding (Not must if you don't use net_ commands to expose IP/port)
 - 27015 UDP
 - 27016 TCP
-### Available Params
-All these params are automatically set by WGSM
-- -publiclobby   	            (Change via WGSM settings)
-- -publicip=192.168.xxx.xxx     (Change via WGSM settings)
-- -publicport=8211              (Change via WGSM settings)
 
 ### Connecting on a locked server (with password)
 Connect via steamid/ip/or lobby in-game 
@@ -39,9 +34,9 @@ Connect via steamid/ip/or lobby in-game
 - connect IP:Gameport
 - via game lobby 
 
-### Blank Console?
+### Server not launching?
 - Try Install Required Redist insde `_CommonRedist` folder
-- Latest DotNet
+- Try Install DotNet
 
 ### Other notes
 - The game is currently in Early Access Stage WGSM and this plugin is not taking liability if something happens to your server, the app is only for managing your server easily

@@ -1,7 +1,22 @@
+name: Build & Release
+
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      PluginVersion:
+        description: 'Plugin Version'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  PLUGIN_NAME: SBox.cs
+  PATH_PLUGIN: SBox.cs
+  START_VERSION: 1.0.0
+  USE_V_VERSION: true
 
 jobs:
   version:
@@ -16,23 +31,49 @@ jobs:
         with:
           fetch-depth: '0'
 
+      - name: Check if tag exists
+        if: github.event_name == 'workflow_dispatch'
+        id: check_tag
+        run: |
+          if git fetch --tags && git tag -l | grep -q "^${{ github.event.inputs.PluginVersion }}$"; then
+            echo "Tag ${{ github.event.inputs.PluginVersion }} already exists."
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag ${{ github.event.inputs.PluginVersion }} does not exist."
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+  
+      - name: Set custom tag and push to repository
+        if: github.event_name == 'workflow_dispatch' && steps.check_tag.outputs.tag_exists == 'false'
+        id: set_custom_tag
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag ${{ github.event.inputs.PluginVersion }}
+          git push origin ${{ github.event.inputs.PluginVersion }}
+        shell: bash
+
       - name: Bump version and push tag
+        if: github.event_name != 'workflow_dispatch'
         id: create_tag
         uses: anothrNick/github-tag-action@1.64.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WITH_V: true
-          DEFAULT_BUMP: patch
-          INITIAL_VERSION: 1.0.0
+          WITH_V: ${{ env.USE_V_VERSION }}
+          DEFAULT_BUMP: none
+          INITIAL_VERSION: ${{ env.START_VERSION }}
 
       - name: Determine New Tag
         id: determine_new_tag
         uses: actions/github-script@v7.0.1
         with:
           script: |
+            const customTag = "${{ github.event.inputs.PluginVersion }}";
             const createdTag = "${{ steps.create_tag.outputs.new_tag }}";
-            console.log(`New tag determined: ${createdTag}`);
-            return createdTag;
+            const newTag = customTag ? customTag : createdTag;
+            console.log(`New tag determined: ${newTag}`);
+            return newTag;
 
       - name: Check if release exists
         id: check_release
@@ -58,34 +99,75 @@ jobs:
             }
             return release_exists;
 
-  build:
+  pack:
     if: needs.version.outputs.no_release == 'false'
     needs: version
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
-      - name: Zip SBox.cs folder
-        run: zip -r SBox.zip SBox.cs
+    - name: Zip plugin
+      run: |
+        zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
 
-      - name: Create Release
+    - name: Publish
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PLUGIN_NAME }}-${{ github.sha }}
+        path: ${{ env.PLUGIN_NAME }}.zip
+
+  release:
+    needs: [version, pack]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_NAME }}-${{ github.sha }}
+          path: ${{ env.PLUGIN_NAME }}
+
+      - name: Create release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7.0.1
         with:
-          tag_name: ${{ needs.version.outputs.new_tag }}
-          release_name: Release ${{ needs.version.outputs.new_tag }}
-          draft: false
-          prerelease: false
+          script: |
+            const tag_name = ${{ needs.version.outputs.new_tag }}.replace(/\"/g, '');
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag_name,
+              name: `[${tag_name}] ${{ env.PLUGIN_NAME }}`,
+              body: "Changes in this Release",
+              draft: false,
+              prerelease: false
+            });
+            return release.data.id;
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/github-script@v7.0.1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./SBox.zip
-          asset_name: SBox.zip
-          asset_content_type: application/zip
+          script: |
+            const fs = require('fs');
+            const assetPath = `./plugin/${{ env.PLUGIN_NAME }}-${{ github.sha }}.zip`;
+            const assetName = `${{ env.PLUGIN_NAME }}-${{ needs.version.outputs.new_tag }}.zip`;
+            const asset = fs.readFileSync(assetPath);
+            
+            const response = await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ steps.create_release.outputs.result }},
+              name: assetName,
+              data: asset,
+              headers: {
+                'content-type': 'application/zip',
+                'content-length': asset.length
+              }
+            });
+            console.log(`Asset uploaded: ${response.data.browser_download_url}`);
