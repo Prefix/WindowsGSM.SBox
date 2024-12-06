@@ -20,6 +20,7 @@
 
 ### The Game
 🕹️ https://store.steampowered.com/app/590830/sbox/
+https://sbox.game/give-me-that - Login to web first with Steam
 
 ### Dedicated server info
 🖥️ https://steamdb.info/app/1892930/info/
