@@ -110,13 +110,14 @@ jobs:
 
     - name: Zip plugin
       run: |
-        zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
+        mkdir -p plugin
+        zip -r plugin/${{ env.PLUGIN_NAME }}-${{ github.sha }}.zip ${{ env.PLUGIN_NAME }}
 
     - name: Publish
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PLUGIN_NAME }}-${{ github.sha }}
-        path: ${{ env.PLUGIN_NAME }}.zip
+        path: plugin/${{ env.PLUGIN_NAME }}-${{ github.sha }}.zip
 
   release:
     needs: [version, pack]
@@ -130,7 +131,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PLUGIN_NAME }}-${{ github.sha }}
-          path: ${{ env.PLUGIN_NAME }}
+          path: plugin
 
       - name: Create release
         id: create_release
