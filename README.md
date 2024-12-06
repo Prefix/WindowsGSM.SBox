@@ -41,7 +41,7 @@ Connect via steamid/ip/or lobby in-game
 
 ### Other notes
 - The game is currently in Early Access Stage WGSM and this plugin is not taking liability if something happens to your server, the app is only for managing your server easily
-- To add GLST to have persistent steamid for your server https://steamcommunity.com/dev/managegameservers
+- Add GSLT (Server token) to have persistent steamid for your server https://steamcommunity.com/dev/managegameservers
 
 ### Support
 [Official Game Discord](https://discord.gg/sbox)
