@@ -32,7 +32,7 @@ namespace WindowsGSM.Plugins
         // - Settings properties for SteamCMD installer
         public override bool loginAnonymous => true;
         public override string AppId => "1892930 -beta staging"; /* taken via https://steamdb.info/app/1892930/info/ */
-
+        public string AppIdReal => "1892930"; /* taken via https://steamdb.info/app/1892930/info/ */
         // - Game server Fixed variables
         public override string StartPath => @"sbox-server.exe"; // Game server start path
         public string FullName = "S&Box Dedicated Server"; // Game server FullName
@@ -110,6 +110,32 @@ namespace WindowsGSM.Plugins
                 },
                 EnableRaisingEvents = true
             };
+            
+            if (AllowsEmbedConsole)
+            {
+                p.StartInfo.CreateNoWindow = true;
+                p.StartInfo.RedirectStandardInput = true;
+                p.StartInfo.RedirectStandardOutput = true;
+                p.StartInfo.RedirectStandardError = true;
+                var serverConsole = new ServerConsole(_serverData.ServerID);
+                p.OutputDataReceived += serverConsole.AddOutput;
+                p.ErrorDataReceived += serverConsole.AddOutput;
+
+                // Start Process
+                try
+                {
+                    p.Start();
+                }
+                catch (Exception e)
+                {
+                    Error = e.Message;
+                    return null; // return null if fail to start
+                }
+
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                return p;
+            }
 
             // Start Process
             try
@@ -162,13 +188,14 @@ namespace WindowsGSM.Plugins
         public string GetLocalBuild()
         {
             var steamCMD = new Installer.SteamCMD();
-            return steamCMD.GetLocalBuild(_serverData.ServerID, AppId);
+            return steamCMD.GetLocalBuild(_serverData.ServerID, AppIdReal);
         }
 
         public async Task<string> GetRemoteBuild()
         {
             var steamCMD = new Installer.SteamCMD();
-            return await steamCMD.GetRemoteBuild(AppId);
+            return await steamCMD.GetRemoteBuild(AppIdReal);
         }
+
     }
 }
